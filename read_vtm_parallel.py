@@ -15,14 +15,19 @@ size = comm.Get_size()
 
 def read_vtm_parallel(file_path):
     """
-    Read a VTM file in parallel and process blocks assigned to each rank.
-    Returns local blocks and all results gathered at rank 0.
+    Read and analyze a VTM file in parallel.
+    Each rank processes its assigned blocks and gathers statistics.
+    Rank 0 prints the overall analysis.
+    Returns:
+        tuple: (local_blocks, all_results) where
+               local_blocks is a MultiBlock with blocks assigned to this rank
+               all_results contains block statistics gathered from all ranks
     """
     try:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"VTM file not found: {file_path}")
         
-        multiblock = pv.read(file_path)
+        multiblock = pv.read(file_path,progress_bar=True)
         num_blocks = multiblock.n_blocks
         if rank == 0:
             print(f"Reading VTM file with {num_blocks} blocks")
@@ -36,16 +41,22 @@ def read_vtm_parallel(file_path):
                 num_points = block.n_points
                 scalar_name = list(block.point_data.keys())[0] if block.point_data else None
                 mean_scalar = np.mean(block.point_data[scalar_name]) if scalar_name else 0.0
+                if rank == 0:
+                    # print(f"Block {i}: {num_points} points, {block.n_cells} cells")
+                    if block.point_data:
+                        for name in block.point_data:
+                            arr = block.point_data[name]
+                            # print(f"  Scalar '{name}': min={np.min(arr):.3f}, max={np.max(arr):.3f}, mean={np.mean(arr):.3f}")
                 local_results.append((i, num_points, mean_scalar))
                 local_blocks.append(block)
                 local_blocks.set_block_name(len(local_blocks) - 1, str(i))
         # No error if a rank has no blocks to process
         all_results = comm.gather(local_results, root=0)
-        if rank == 0:
-            print("Results from all processes:")
-            for proc_id, results in enumerate(all_results):
-                for block_id, num_points, mean_scalar in results:
-                    print(f"Process {proc_id}, Block {block_id}: {num_points} points, Mean Scalar: {mean_scalar:.2f}")
+        # if rank == 0:
+        #     # print("Results from all processes:")
+        #     for proc_id, results in enumerate(all_results):
+        #         for block_id, num_points, mean_scalar in results:
+        #             print(f"Process {proc_id}, Block {block_id}: {num_points} points, Mean Scalar: {mean_scalar:.2f}")
         return local_blocks, all_results
     except Exception as e:
         print(f"Rank {rank}: Error reading VTM file: {str(e)}")
@@ -63,19 +74,36 @@ def compress_vtm(local_blocks, all_results, output_file):
         import glob
         for i, block in enumerate(tqdm(local_blocks, desc=f"Rank {rank} compressing blocks", position=rank)):
             block_id = local_blocks.get_block_name(i)
-            vtu_file = f"{output_file}_block_{block_id}_rank_{rank}.vtu"
-            writer = vtk.vtkXMLUnstructuredGridWriter()
-            writer.SetFileName(vtu_file)
+            
+            # Choose appropriate writer based on data type
+            if isinstance(block, pv.ImageData):
+                writer = vtk.vtkXMLImageDataWriter()
+                ext = "vti"
+            elif isinstance(block, pv.RectilinearGrid):
+                writer = vtk.vtkXMLRectilinearGridWriter()
+                ext = "vtr"
+            elif isinstance(block, pv.StructuredGrid):
+                writer = vtk.vtkXMLStructuredGridWriter()
+                ext = "vts"
+            elif isinstance(block, pv.PolyData):
+                writer = vtk.vtkXMLPolyDataWriter()
+                ext = "vtp"
+            else:  # Default to UnstructuredGrid
+                writer = vtk.vtkXMLUnstructuredGridWriter()
+                ext = "vtu"
+            
+            output_file_block = f"{output_file}_block_{block_id}_rank_{rank}.{ext}"
+            writer.SetFileName(output_file_block)
             writer.SetInputData(block)
             writer.SetDataModeToBinary()
             writer.SetCompressorTypeToZLib()
             writer.SetCompressionLevel(9)
             writer.Write()
-            local_vtu_files.append((block_id, vtu_file))
-            # Also gather the block itself for final VTM assembly
+            local_vtu_files.append((block_id, output_file_block))
             local_block_info.append((block_id, block))
-        if rank == 0:
-            print(f"Rank {rank} wrote {len(local_vtu_files)} VTU files")
+
+        # if rank == 0:
+        #     print(f"Rank {rank} wrote {len(local_vtu_files)} blocks")
 
         # Gather all block info (block_id, block) from all ranks to rank 0
         all_block_info = comm.gather(local_block_info, root=0)
@@ -83,7 +111,6 @@ def compress_vtm(local_blocks, all_results, output_file):
 
         if rank == 0:
             output_multiblock = pv.MultiBlock()
-            block_names = []
             # Flatten the list and sort by block_id for deterministic order
             flat_blocks = []
             for proc_blocks in all_block_info:
@@ -98,18 +125,27 @@ def compress_vtm(local_blocks, all_results, output_file):
             for idx, (block_id, block) in enumerate(flat_blocks):
                 output_multiblock.append(block)
                 output_multiblock.set_block_name(idx, f"Block_{block_id}")
-            print(f"Rank 0 collected {len(flat_blocks)} blocks for VTM")
-            output_multiblock.save(output_file, binary=True)
+            # print(f"Rank 0 collected {len(flat_blocks)} blocks for VTM")
+            
+            # Use VTK writer directly for better compression control
+            writer = vtk.vtkXMLMultiBlockDataWriter()
+            writer.SetFileName(output_file)
+            writer.SetInputData(output_multiblock)
+            writer.SetDataModeToBinary()
+            writer.SetCompressorTypeToZLib()
+            writer.SetCompressionLevel(9)
+            writer.Write()
+            
             print(f"Compressed VTM file written to: {output_file}")
 
-            # Remove intermediate VTU files generated by all ranks
-            vtu_patterns = [f"{output_file}_block_*.vtu"]
-            for pattern in vtu_patterns:
-                for vtu_file in glob.glob(pattern):
+            # Remove intermediate files generated by all ranks
+            patterns = [f"{output_file}_block_*.vt?"]  # Matches .vtu, .vti, .vtr, .vts, .vtp
+            for pattern in patterns:
+                for temp_file in glob.glob(pattern):
                     try:
-                        os.remove(vtu_file)
+                        os.remove(temp_file)
                     except Exception as e:
-                        print(f"Warning: Could not remove {vtu_file}: {e}")
+                        print(f"Warning: Could not remove {temp_file}: {e}")
 
         comm.Barrier()
     except Exception as e:
@@ -144,29 +180,6 @@ def create_sample_vtm():
         return None
     return file_path
 
-def read_vtm(file_path):
-    """
-    Read a VTM file and print information about its blocks and scalars.
-    Returns the loaded MultiBlock dataset, or None on error.
-    """
-    try:
-        if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
-            return None
-        multiblock = pv.read(file_path)
-        print(f"Read VTM file: {file_path} with {multiblock.n_blocks} blocks")
-        for i in tqdm(range(multiblock.n_blocks), desc="Reading VTM blocks"):
-            block = multiblock[i]
-            if block is not None:
-                # print(f"Block {i}: {block.n_points} points, {block.n_cells} cells")
-                if block.point_data:
-                    for name in block.point_data:
-                        arr = block.point_data[name]
-                        # print(f"  Scalar '{name}': min={np.min(arr):.3f}, max={np.max(arr):.3f}, mean={np.mean(arr):.3f}")
-        return multiblock
-    except Exception as e:
-        print(f"Error reading VTM file '{file_path}': {e}")
-        return None
 
 async def main():
     """
@@ -178,12 +191,8 @@ async def main():
     # input_file = create_sample_vtm() if rank == 0 else None
     # input_file = comm.bcast(input_file, root=0)
 
-    # To use an existing VTM file, set its path here:
+    # Use an existing VTM file
     input_file = "/home/dhruv/Desktop/downsampled.vtm"  # Change this to your actual VTM file path
-    if rank == 0:
-        read_vtm(input_file)
-
-    comm.Barrier()
 
     local_blocks, all_results = read_vtm_parallel(input_file)
     if rank == 0:
