@@ -173,4 +173,5 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 vtu_parts
-compressed_output.*.vtu
+compressed_output*
+sample_0*
