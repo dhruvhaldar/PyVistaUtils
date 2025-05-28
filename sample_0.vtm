@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<VTKFile type="vtkMultiBlockDataSet" version="1.0" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
-  <vtkMultiBlockDataSet>
-    <DataSet index="0" name="Block-00" file="sample_0/sample_0_0.vtu"/>
-    <DataSet index="1" name="Block-01" file="sample_0/sample_0_1.vtu"/>
-    <DataSet index="2" name="Block-02" file="sample_0/sample_0_2.vtu"/>
-    <DataSet index="3" name="Block-03" file="sample_0/sample_0_3.vtu"/>
-  </vtkMultiBlockDataSet>
-</VTKFile>

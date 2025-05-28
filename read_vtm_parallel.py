@@ -144,36 +144,52 @@ def create_sample_vtm():
         return None
     return file_path
 
+def read_vtm(file_path):
+    """
+    Read a VTM file and print information about its blocks and scalars.
+    Returns the loaded MultiBlock dataset, or None on error.
+    """
+    try:
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return None
+        multiblock = pv.read(file_path, progress_bar=True)
+        print(f"Read VTM file: {file_path} with {multiblock.n_blocks} blocks")
+        for i in range(multiblock.n_blocks):
+            block = multiblock[i]
+            if block is not None:
+                print(f"Block {i}: {block.n_points} points, {block.n_cells} cells")
+                if block.point_data:
+                    for name in block.point_data:
+                        arr = block.point_data[name]
+                        print(f"  Scalar '{name}': min={np.min(arr):.3f}, max={np.max(arr):.3f}, mean={np.mean(arr):.3f}")
+        return multiblock
+    except Exception as e:
+        print(f"Error reading VTM file '{file_path}': {e}")
+        return None
+
 async def main():
     """
     Main async loop for parallel VTM read/compress workflow.
     Handles error propagation and synchronization across ranks.
     """
-    error_flag = 0
-    input_file = create_sample_vtm() if rank == 0 else None
-    input_file = comm.bcast(input_file, root=0)
-    if input_file is None:
-        error_flag = 1
-    # Broadcast error flag to all ranks
-    error_flag = comm.bcast(error_flag, root=0)
-    if error_flag:
-        print(f"Rank {rank}: Exiting due to error in file creation.")
-        comm.Barrier()
-        return
+    # --- Choose input file for workflow ---
+    # To use a sample VTM file, uncomment the next two lines:
+    # input_file = create_sample_vtm() if rank == 0 else None
+    # input_file = comm.bcast(input_file, root=0)
 
-    # print(f"Rank {rank}: before Barrier 1")
+    # To use an existing VTM file, set its path here:
+    input_file = "/home/dhruv/Desktop/downsampled.vtm"  # Change this to your actual VTM file path
+    if rank == 0:
+        read_vtm(input_file)
+
     comm.Barrier()
-    # print(f"Rank {rank}: after Barrier 1")
 
     local_blocks, all_results = read_vtm_parallel(input_file)
-    # print(f"Rank {rank}: local_blocks type: {type(local_blocks)}, len: {len(local_blocks) if local_blocks is not None else 'None'}")
-    # print(f"Rank {rank}: all_results type: {type(all_results)}, value: {all_results}")
-    # Only treat as error if local_blocks is None, or if rank 0 and all_results is None
     if rank == 0:
         local_error = 0 if (local_blocks is not None and all_results is not None) else 1
     else:
         local_error = 0 if (local_blocks is not None) else 1
-    # Gather error flags from all ranks
     all_errors = comm.gather(local_error, root=0)
     global_error = 0
     if rank == 0:
