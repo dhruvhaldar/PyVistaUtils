@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<VTKFile type="vtkMultiBlockDataSet" version="1.0" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <vtkMultiBlockDataSet>
+    <DataSet index="0" name="Block_0" file="compressed_output/compressed_output_0.vtu"/>
+    <DataSet index="1" name="Block_1" file="compressed_output/compressed_output_1.vtu"/>
+    <DataSet index="2" name="Block_2" file="compressed_output/compressed_output_2.vtu"/>
+    <DataSet index="3" name="Block_3" file="compressed_output/compressed_output_3.vtu"/>
+  </vtkMultiBlockDataSet>
+</VTKFile>
