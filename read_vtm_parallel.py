@@ -153,16 +153,16 @@ def read_vtm(file_path):
         if not os.path.exists(file_path):
             print(f"File not found: {file_path}")
             return None
-        multiblock = pv.read(file_path, progress_bar=True)
+        multiblock = pv.read(file_path)
         print(f"Read VTM file: {file_path} with {multiblock.n_blocks} blocks")
-        for i in range(multiblock.n_blocks):
+        for i in tqdm(range(multiblock.n_blocks), desc="Reading VTM blocks"):
             block = multiblock[i]
             if block is not None:
-                print(f"Block {i}: {block.n_points} points, {block.n_cells} cells")
+                # print(f"Block {i}: {block.n_points} points, {block.n_cells} cells")
                 if block.point_data:
                     for name in block.point_data:
                         arr = block.point_data[name]
-                        print(f"  Scalar '{name}': min={np.min(arr):.3f}, max={np.max(arr):.3f}, mean={np.mean(arr):.3f}")
+                        # print(f"  Scalar '{name}': min={np.min(arr):.3f}, max={np.max(arr):.3f}, mean={np.mean(arr):.3f}")
         return multiblock
     except Exception as e:
         print(f"Error reading VTM file '{file_path}': {e}")
