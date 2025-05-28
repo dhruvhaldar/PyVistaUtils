@@ -1,10 +1,12 @@
 import asyncio
 import platform
 import os
+
 import vtk
 import pyvista as pv
 import numpy as np
 from mpi4py import MPI
+from tqdm import tqdm
 
 # Initialize MPI
 comm = MPI.COMM_WORLD
@@ -27,7 +29,8 @@ def read_vtm_parallel(file_path):
         
         local_blocks = pv.MultiBlock()
         local_results = []
-        for i in range(rank, num_blocks, size):
+        block_indices = list(range(rank, num_blocks, size))
+        for i in tqdm(block_indices, desc=f"Rank {rank} reading blocks", position=rank):
             block = multiblock[i]
             if block:
                 num_points = block.n_points
@@ -58,7 +61,7 @@ def compress_vtm(local_blocks, all_results, output_file):
         local_vtu_files = []
         local_block_info = []
         import glob
-        for i, block in enumerate(local_blocks):
+        for i, block in enumerate(tqdm(local_blocks, desc=f"Rank {rank} compressing blocks", position=rank)):
             block_id = local_blocks.get_block_name(i)
             vtu_file = f"{output_file}_block_{block_id}_rank_{rank}.vtu"
             writer = vtk.vtkXMLUnstructuredGridWriter()
@@ -158,13 +161,13 @@ async def main():
         comm.Barrier()
         return
 
-    print(f"Rank {rank}: before Barrier 1")
+    # print(f"Rank {rank}: before Barrier 1")
     comm.Barrier()
-    print(f"Rank {rank}: after Barrier 1")
+    # print(f"Rank {rank}: after Barrier 1")
 
     local_blocks, all_results = read_vtm_parallel(input_file)
-    print(f"Rank {rank}: local_blocks type: {type(local_blocks)}, len: {len(local_blocks) if local_blocks is not None else 'None'}")
-    print(f"Rank {rank}: all_results type: {type(all_results)}, value: {all_results}")
+    # print(f"Rank {rank}: local_blocks type: {type(local_blocks)}, len: {len(local_blocks) if local_blocks is not None else 'None'}")
+    # print(f"Rank {rank}: all_results type: {type(all_results)}, value: {all_results}")
     # Only treat as error if local_blocks is None, or if rank 0 and all_results is None
     if rank == 0:
         local_error = 0 if (local_blocks is not None and all_results is not None) else 1
