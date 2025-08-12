@@ -13,6 +13,7 @@ A collection of utilities for working with 3D mesh files using [PyVista](https:/
 - [PyVista](https://github.com/pyvista/pyvista)
 - [mpi4py](https://github.com/mpi4py/mpi4py)
 - [VTK](https://vtk.org/)
+- [numpy-stl](https://github.com/WoLpH/numpy-stl/)
 - See `requirements.txt` for the full list.
 
 ## Installation
