@@ -35,7 +35,7 @@ mpiexec -n 4 python read_vtm_parallel.py <path_to_file.vtm>
 - Each MPI rank processes a subset of blocks.
 - Statistics are gathered and printed by rank 0.
 
-### 2. STL Scaling
+### 2. STL Scaling (Using PyVista)
 
 Scale an STL file by a factor (uniform or non-uniform):
 
