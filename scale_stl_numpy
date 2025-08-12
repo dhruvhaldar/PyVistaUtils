@@ -1,0 +1,50 @@
+from stl import mesh
+
+def scale_stl_file(input_file, output_file, scale_factor):
+    """
+    Scales an STL file and saves the result to a new file.
+
+    Args:
+        input_file (str): The path to the input STL file.
+        output_file (str): The path to the output STL file.
+        scale_factor (float): The factor by which to scale the model.
+                              A value of 2.0 will double its size.
+                              A value of 0.5 will halve its size.
+    """
+    try:
+        # Load the STL file
+        your_mesh = mesh.Mesh.from_file(input_file)
+        
+        print(f"Successfully loaded {input_file}.")
+        print(f"Scaling mesh by a factor of {scale_factor}...")
+
+        # Get the original vectors (vertices)
+        vectors = your_mesh.vectors
+        
+        # Scale the vectors
+        # The 'vectors' attribute is a NumPy array, so we can
+        # perform the scaling operation directly.
+        scaled_vectors = vectors * scale_factor
+        
+        # Replace the original vectors with the scaled ones
+        your_mesh.vectors = scaled_vectors
+        
+        # Save the scaled mesh to a new file
+        your_mesh.save(output_file)
+        
+        print(f"Successfully saved scaled mesh to {output_file}.")
+
+    except FileNotFoundError:
+        print(f"Error: The file {input_file} was not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == '__main__':
+    # --- Configuration ---
+    # Change these values to match your file and desired scale
+    input_stl = 'Segment_3_99_scaled.stl'       # The original STL file
+    output_stl = 'output_scaled.stl' # The name for the new scaled STL file
+    scale_by = 100.0                # The scaling factor (e.g., 2.0 doubles the size)
+
+    # --- Run the function ---
+    scale_stl_file(input_stl, output_stl, scale_by)
